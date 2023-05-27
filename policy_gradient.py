@@ -34,7 +34,11 @@ def train_model(
         rewards_singletraj = traj["rewards"]
         returns_singletraj = np.zeros_like(rewards_singletraj)
         # TODO start
-
+        returns_singletraj[-1] = rewards_singletraj[-1]
+        for i in range(rewards_singletraj.shape[0] - 2, 0, -1):
+            returns_singletraj[i] = (
+                rewards_singletraj[i] + gamma * returns_singletraj[i + 1]
+            )
         # TODO end
         states_all.append(states_singletraj)
         actions_all.append(actions_singletraj)
@@ -46,7 +50,7 @@ def train_model(
     # TODO: Normalize the returns by subtracting mean and dividing by std
     # Hint: Just do return - return.mean()/ (return.std() + EPS), where EPS is a small constant for numerics
     # TODO start
-
+    returns = (returns - returns.mean()) / (returns.std() + 1e-9)
     # TODO end
 
     # TODO: Train baseline by regressing onto returns
@@ -54,15 +58,21 @@ def train_model(
     # Hint: Iterate for baseline_num_epochs with batch size = baseline_train_batch_size
     criterion = torch.nn.MSELoss()
     n = len(states)
-    arr = np.arange(n)
+    # arr = np.arange(n)
+    state_t = torch.tensor(states, dtype=torch.float32, device=device)
+    return_t = torch.tensor(returns, dtype=torch.float32, device=device)
+    num_batches = n // baseline_train_batch_size
     for epoch in range(baseline_num_epochs):
-        np.random.shuffle(arr)
-        for i in range(n // baseline_train_batch_size):
-            batch_index = arr[
-                baseline_train_batch_size * i : baseline_train_batch_size * (i + 1)
-            ]
-            batch_index = torch.LongTensor(batch_index).to(device)
+        idx = torch.randperm(states.shape[0])[: num_batches * baseline_train_batch_size]
+        states_ = state_t[idx].reshape(num_batches, baseline_train_batch_size, -1)
+        returns_ = return_t[idx].reshape(num_batches, baseline_train_batch_size, -1)
+        for i in range(num_batches):
             # TODO start
+            s_batch = states_[i]
+            r_batch = returns_[i]
+
+            r_hat = baseline(s_batch)
+            loss = ((r_hat - r_batch) ** 2).mean()
 
             # TODO end
             baseline_optim.zero_grad()
@@ -79,7 +89,7 @@ def train_model(
     log_policy = log_density(torch.Tensor(actions).to(device), mu, std, logstd)
     baseline_pred = baseline(torch.from_numpy(states).float().to(device))
     # TODO start
-
+    loss = (-log_policy * (return_t - baseline_pred)).mean()
     # TODO end
 
     policy_optim.zero_grad()
