@@ -1,13 +1,20 @@
 import torch
 import torch.optim as optim
 import numpy as np
-from utils import rollout
+from utils import rollout, BCPolicy
+from typing import List, Dict
+from gym import Env
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def simulate_policy_bc(
-    env, policy, expert_data, num_epochs=500, episode_length=50, batch_size=32
+    env: Env,
+    policy: BCPolicy,
+    expert_data: List[Dict[str, np.ndarray]],
+    num_epochs: int = 500,
+    episode_length: int = 50,
+    batch_size: int = 32,
 ):
     # Hint: Just flatten your expert dataset and use standard pytorch supervised learning code to train the policy.
     optimizer = optim.Adam(list(policy.parameters()))
