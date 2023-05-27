@@ -1,22 +1,25 @@
 import torch
 import torch.optim as optim
 import numpy as np
+from gym import Env
+from typing import List, Dict
 
-from utils import rollout, relabel_action
+from utils import rollout, relabel_action, BCPolicy
+from policy import MakeDeterministic
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 def simulate_policy_dagger(
-    env,
-    policy,
-    expert_paths,
-    expert_policy=None,
-    num_epochs=500,
-    episode_length=50,
-    batch_size=32,
-    num_dagger_iters=10,
-    num_trajs_per_dagger=10,
+    env: Env,
+    policy: BCPolicy,
+    expert_paths: List[Dict[str, np.ndarray]],
+    expert_policy: MakeDeterministic,
+    num_epochs: int = 500,
+    episode_length: int = 50,
+    batch_size: int = 32,
+    num_dagger_iters: int = 10,
+    num_trajs_per_dagger: int = 10,
 ):
     # TODO: Fill in your dagger implementation here.
 
