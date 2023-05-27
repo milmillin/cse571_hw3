@@ -38,12 +38,38 @@ def simulate_policy_dagger(
         idxs = np.array(range(len(trajs)))
         num_batches = len(idxs) * episode_length // batch_size
         losses = []
+
+        states = torch.tensor(
+            np.array([d["observations"] for d in trajs]),
+            device=device,
+            dtype=torch.float32,
+        ).flatten(
+            0, 1
+        )  # (n-run * episode_length, n-dim)
+        actions = torch.tensor(
+            np.array([d["actions"] for d in trajs]),
+            device=device,
+            dtype=torch.float32,
+        ).flatten(
+            0, 1
+        )  # (n-run * episode_length, n-dim)
+        print(states.shape, actions.shape)
         # Train the model with Adam
         for epoch in range(num_epochs):
             running_loss = 0.0
+
+            idx = torch.randperm(states.shape[0])[:num_batches * batch_size]
+            states_ = states[idx].reshape(num_batches, batch_size, -1)
+            actions_ = actions[idx].reshape(num_batches, batch_size, -1)
+
             for i in range(num_batches):
                 optimizer.zero_grad()
                 # TODO start: Fill in your behavior cloning implementation here
+                s_batch = states_[i]
+                a_batch = actions_[i]
+
+                a_hat = policy(s_batch)
+                loss = ((a_hat - a_batch) ** 2).mean()
 
                 # TODO end
                 loss.backward()
@@ -59,7 +85,9 @@ def simulate_policy_dagger(
         for k in range(num_trajs_per_dagger):
             env.reset()
             # TODO start: Rollout the policy on the environment to collect more data, relabel them, add them into trajs_recent
-
+            path = rollout(env, policy, "dagger", episode_length)
+            path = relabel_action(path, expert_policy)
+            trajs_recent.append(path)
             # TODO end
 
         trajs += trajs_recent

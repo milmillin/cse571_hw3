@@ -17,6 +17,21 @@ def simulate_policy_bc(
     batch_size: int = 32,
 ):
     # Hint: Just flatten your expert dataset and use standard pytorch supervised learning code to train the policy.
+    states = torch.tensor(
+        np.array([d["observations"] for d in expert_data]),
+        device=device,
+        dtype=torch.float32,
+    ).flatten(
+        0, 1
+    )  # (n-run * episode_length, n-dim)
+    actions = torch.tensor(
+        np.array([d["actions"] for d in expert_data]),
+        device=device,
+        dtype=torch.float32,
+    ).flatten(
+        0, 1
+    )  # (n-run * episode_length, n-dim)
+
     optimizer = optim.Adam(list(policy.parameters()))
     idxs = np.array(range(len(expert_data)))
     num_batches = len(idxs) * episode_length // batch_size
@@ -25,9 +40,19 @@ def simulate_policy_bc(
         ## TODO Students
         np.random.shuffle(idxs)
         running_loss = 0.0
+
+        idx = torch.randperm(states.shape[0])[:num_batches * batch_size]
+        states_ = states[idx].reshape(num_batches, batch_size, -1)
+        actions_ = actions[idx].reshape(num_batches, batch_size, -1)
+
         for i in range(num_batches):
             optimizer.zero_grad()
             # TODO start: Fill in your behavior cloning implementation here
+            s_batch = states_[i]
+            a_batch = actions_[i]
+
+            a_hat = policy(s_batch)
+            loss = ((a_hat - a_batch) ** 2).mean()
 
             # TODO end
             loss.backward()
