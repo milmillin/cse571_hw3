@@ -5,12 +5,13 @@ from torch import nn
 from collections import OrderedDict
 from numbers import Number
 
+
 def create_stats_ordered_dict(
-        name,
-        data,
-        stat_prefix=None,
-        always_show_all_stats=True,
-        exclude_max_min=False,
+    name,
+    data,
+    stat_prefix=None,
+    always_show_all_stats=True,
+    exclude_max_min=False,
 ):
     if stat_prefix is not None:
         name = "{}{}".format(stat_prefix, name)
@@ -38,31 +39,33 @@ def create_stats_ordered_dict(
         else:
             data = np.concatenate(data)
 
-    if (isinstance(data, np.ndarray) and data.size == 1
-            and not always_show_all_stats):
+    if isinstance(data, np.ndarray) and data.size == 1 and not always_show_all_stats:
         return OrderedDict({name: float(data)})
 
-    stats = OrderedDict([
-        (name + ' Mean', np.mean(data)),
-        (name + ' Std', np.std(data)),
-    ])
+    stats = OrderedDict(
+        [
+            (name + " Mean", np.mean(data)),
+            (name + " Std", np.std(data)),
+        ]
+    )
     if not exclude_max_min:
-        stats[name + ' Max'] = np.max(data)
-        stats[name + ' Min'] = np.min(data)
+        stats[name + " Max"] = np.max(data)
+        stats[name + " Min"] = np.min(data)
     return stats
+
 
 def identity(x):
     return x
 
 
 _str_to_activation = {
-    'identity': identity,
-    'relu': nn.ReLU(),
-    'tanh': nn.Tanh(),
-    'leaky_relu': nn.LeakyReLU(),
-    'sigmoid': nn.Sigmoid(),
-    'selu': nn.SELU(),
-    'softplus': nn.Softplus(),
+    "identity": identity,
+    "relu": nn.ReLU(),
+    "tanh": nn.Tanh(),
+    "leaky_relu": nn.LeakyReLU(),
+    "sigmoid": nn.Sigmoid(),
+    "selu": nn.SELU(),
+    "softplus": nn.Softplus(),
 }
 
 
@@ -72,9 +75,7 @@ def activation_from_string(string):
 
 def soft_update_from_to(source, target, tau):
     for target_param, param in zip(target.parameters(), source.parameters()):
-        target_param.data.copy_(
-            target_param.data * (1.0 - tau) + param.data * tau
-        )
+        target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
 
 def copy_model_params_from_to(source, target):
@@ -87,7 +88,9 @@ def maximum_2d(t1, t2):
     return torch.max(
         torch.cat((t1.unsqueeze(2), t2.unsqueeze(2)), dim=2),
         dim=2,
-    )[0].squeeze(2)
+    )[
+        0
+    ].squeeze(2)
 
 
 def kronecker_product(t1, t2):
@@ -104,29 +107,33 @@ def kronecker_product(t1, t2):
     tiled_t2 = t2.repeat(t1_height, t1_width)
     expanded_t1 = (
         t1.unsqueeze(2)
-            .unsqueeze(3)
-            .repeat(1, t2_height, t2_width, 1)
-            .view(out_height, out_width)
+        .unsqueeze(3)
+        .repeat(1, t2_height, t2_width, 1)
+        .view(out_height, out_width)
     )
 
     return expanded_t1 * tiled_t2
 
 
 def alpha_dropout(
-        x,
-        p=0.05,
-        alpha=-1.7580993408473766,
-        fixedPointMean=0,
-        fixedPointVar=1,
-        training=False,
+    x,
+    p=0.05,
+    alpha=-1.7580993408473766,
+    fixedPointMean=0,
+    fixedPointVar=1,
+    training=False,
 ):
     keep_prob = 1 - p
     if keep_prob == 1 or not training:
         return x
-    a = np.sqrt(fixedPointVar / (keep_prob * (
-            (1 - keep_prob) * pow(alpha - fixedPointMean, 2) + fixedPointVar)))
-    b = fixedPointMean - a * (
-            keep_prob * fixedPointMean + (1 - keep_prob) * alpha)
+    a = np.sqrt(
+        fixedPointVar
+        / (
+            keep_prob
+            * ((1 - keep_prob) * pow(alpha - fixedPointMean, 2) + fixedPointVar)
+        )
+    )
+    b = fixedPointMean - a * (keep_prob * fixedPointMean + (1 - keep_prob) * alpha)
     keep_prob = 1 - p
 
     random_tensor = keep_prob + torch.rand(x.size())
@@ -163,10 +170,7 @@ def double_moments(x, y):
     x = x.unsqueeze(2)
     y = y.unsqueeze(1)
 
-    outer_prod = (
-            x.expand(batch_size, x_dim, y_dim) * y.expand(batch_size, x_dim,
-                                                          y_dim)
-    )
+    outer_prod = x.expand(batch_size, x_dim, y_dim) * y.expand(batch_size, x_dim, y_dim)
     return outer_prod.view(batch_size, -1)
 
 
@@ -195,7 +199,7 @@ def fanin_init(tensor):
         fan_in = np.prod(size[1:])
     else:
         raise Exception("Shape must be have dimension at least 2.")
-    bound = 1. / np.sqrt(fan_in)
+    bound = 1.0 / np.sqrt(fan_in)
     return tensor.data.uniform_(-bound, bound)
 
 
@@ -207,7 +211,7 @@ def fanin_init_weights_like(tensor):
         fan_in = np.prod(size[1:])
     else:
         raise Exception("Shape must be have dimension at least 2.")
-    bound = 1. / np.sqrt(fan_in)
+    bound = 1.0 / np.sqrt(fan_in)
     new_tensor = FloatTensor(tensor.size())
     new_tensor.uniform_(-bound, bound)
     return new_tensor
@@ -245,25 +249,26 @@ def compute_conv_layer_sizes(h_in, w_in, kernel_sizes, strides, paddings=None):
     if paddings == None:
         for kernel, stride in zip(kernel_sizes, strides):
             h_in, w_in = compute_conv_output_size(h_in, w_in, kernel, stride)
-            print('Output Size:', (h_in, w_in))
+            print("Output Size:", (h_in, w_in))
     else:
         for kernel, stride, padding in zip(kernel_sizes, strides, paddings):
-            h_in, w_in = compute_conv_output_size(h_in, w_in, kernel, stride,
-                                                  padding=padding)
-            print('Output Size:', (h_in, w_in))
+            h_in, w_in = compute_conv_output_size(
+                h_in, w_in, kernel, stride, padding=padding
+            )
+            print("Output Size:", (h_in, w_in))
 
 
-def compute_deconv_layer_sizes(h_in, w_in, kernel_sizes, strides,
-                               paddings=None):
+def compute_deconv_layer_sizes(h_in, w_in, kernel_sizes, strides, paddings=None):
     if paddings == None:
         for kernel, stride in zip(kernel_sizes, strides):
             h_in, w_in = compute_deconv_output_size(h_in, w_in, kernel, stride)
-            print('Output Size:', (h_in, w_in))
+            print("Output Size:", (h_in, w_in))
     else:
         for kernel, stride, padding in zip(kernel_sizes, strides, paddings):
-            h_in, w_in = compute_deconv_output_size(h_in, w_in, kernel, stride,
-                                                    padding=padding)
-            print('Output Size:', (h_in, w_in))
+            h_in, w_in = compute_deconv_output_size(
+                h_in, w_in, kernel, stride, padding=padding
+            )
+            print("Output Size:", (h_in, w_in))
 
 
 """
@@ -303,7 +308,7 @@ def from_numpy(*args, **kwargs):
 
 
 def get_numpy(tensor):
-    return tensor.to('cpu').detach().numpy()
+    return tensor.to("cpu").detach().numpy()
 
 
 def randint(*sizes, torch_device=None, **kwargs):

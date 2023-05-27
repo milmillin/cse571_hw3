@@ -17,6 +17,7 @@ LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
 epsilon = 0.001
 
+
 class Distribution(TorchDistribution):
     def sample_and_logprob(self):
         s = self.sample()
@@ -33,6 +34,7 @@ class Distribution(TorchDistribution):
 
     def get_diagnostics(self):
         return {}
+
 
 class TorchDistributionWrapper(Distribution):
     def __init__(self, distribution: TorchDistribution):
@@ -91,36 +93,46 @@ class TorchDistributionWrapper(Distribution):
         return self.distribution.perplexity()
 
     def __repr__(self):
-        return 'Wrapped ' + self.distribution.__repr__()
+        return "Wrapped " + self.distribution.__repr__()
+
 
 class Independent(Distribution, TorchIndependent):
     def get_diagnostics(self):
         return self.base_dist.get_diagnostics()
 
+
 class MultivariateDiagonalNormal(TorchDistributionWrapper):
     from torch.distributions import constraints
-    arg_constraints = {'loc': constraints.real, 'scale': constraints.positive}
+
+    arg_constraints = {"loc": constraints.real, "scale": constraints.positive}
 
     def __init__(self, loc, scale_diag, reinterpreted_batch_ndims=1):
-        dist = Independent(TorchNormal(loc, scale_diag),
-                           reinterpreted_batch_ndims=reinterpreted_batch_ndims)
+        dist = Independent(
+            TorchNormal(loc, scale_diag),
+            reinterpreted_batch_ndims=reinterpreted_batch_ndims,
+        )
         super().__init__(dist)
 
     def get_diagnostics(self):
         stats = OrderedDict()
-        stats.update(ptu.create_stats_ordered_dict(
-            'mean',
-            ptu.get_numpy(self.mean),
-            # exclude_max_min=True,
-        ))
-        stats.update(ptu.create_stats_ordered_dict(
-            'std',
-            ptu.get_numpy(self.distribution.stddev),
-        ))
+        stats.update(
+            ptu.create_stats_ordered_dict(
+                "mean",
+                ptu.get_numpy(self.mean),
+                # exclude_max_min=True,
+            )
+        )
+        stats.update(
+            ptu.create_stats_ordered_dict(
+                "std",
+                ptu.get_numpy(self.distribution.stddev),
+            )
+        )
         return stats
 
     def __repr__(self):
         return self.distribution.base_dist.__repr__()
+
 
 class TanhNormal(Distribution):
     """
@@ -130,6 +142,7 @@ class TanhNormal(Distribution):
 
     Note: this is not very numerically stable.
     """
+
     def __init__(self, normal_mean, normal_std, epsilon=1e-6):
         """
         :param normal_mean: Mean of the normal distribution
@@ -169,10 +182,10 @@ class TanhNormal(Distribution):
         :return:
         """
         log_prob = self.normal.log_prob(pre_tanh_value)
-        correction = - 2. * (
-            ptu.from_numpy(np.log([2.]))
+        correction = -2.0 * (
+            ptu.from_numpy(np.log([2.0]))
             - pre_tanh_value
-            - torch.nn.functional.softplus(-2. * pre_tanh_value)
+            - torch.nn.functional.softplus(-2.0 * pre_tanh_value)
         ).sum(dim=1)
         return log_prob + correction
 
@@ -180,17 +193,16 @@ class TanhNormal(Distribution):
         if pre_tanh_value is None:
             # errors or instability at values near 1
             value = torch.clamp(value, -0.999999, 0.999999)
-            pre_tanh_value = torch.log(1+value) / 2 - torch.log(1-value) / 2
+            pre_tanh_value = torch.log(1 + value) / 2 - torch.log(1 - value) / 2
         return self._log_prob_from_pre_tanh(pre_tanh_value)
 
     def rsample_with_pretanh(self):
         z = (
-                self.normal_mean +
-                self.normal_std *
-                MultivariateDiagonalNormal(
-                    ptu.zeros(self.normal_mean.size()),
-                    ptu.ones(self.normal_std.size())
-                ).sample()
+            self.normal_mean
+            + self.normal_std
+            * MultivariateDiagonalNormal(
+                ptu.zeros(self.normal_mean.size()), ptu.ones(self.normal_std.size())
+            ).sample()
         )
         return torch.tanh(z), z
 
@@ -236,19 +248,23 @@ class TanhNormal(Distribution):
 
     def get_diagnostics(self):
         stats = OrderedDict()
-        stats.update(ptu.create_stats_ordered_dict(
-            'mean',
-            ptu.get_numpy(self.mean),
-        ))
-        stats.update(ptu.create_stats_ordered_dict(
-            'normal/std',
-            ptu.get_numpy(self.normal_std)
-        ))
-        stats.update(ptu.create_stats_ordered_dict(
-            'normal/log_std',
-            ptu.get_numpy(torch.log(self.normal_std)),
-        ))
+        stats.update(
+            ptu.create_stats_ordered_dict(
+                "mean",
+                ptu.get_numpy(self.mean),
+            )
+        )
+        stats.update(
+            ptu.create_stats_ordered_dict("normal/std", ptu.get_numpy(self.normal_std))
+        )
+        stats.update(
+            ptu.create_stats_ordered_dict(
+                "normal/log_std",
+                ptu.get_numpy(torch.log(self.normal_std)),
+            )
+        )
         return stats
+
 
 def torch_ify(np_array_or_other):
     if isinstance(np_array_or_other, np.ndarray):
@@ -256,17 +272,20 @@ def torch_ify(np_array_or_other):
     else:
         return np_array_or_other
 
+
 def np_ify(tensor_or_other):
     if isinstance(tensor_or_other, torch.autograd.Variable):
         return ptu.get_numpy(tensor_or_other)
     else:
         return tensor_or_other
 
+
 def elem_or_tuple_to_numpy(elem_or_tuple):
     if isinstance(elem_or_tuple, tuple):
         return tuple(np_ify(x) for x in elem_or_tuple)
     else:
         return np_ify(elem_or_tuple)
+
 
 class LayerNorm(nn.Module):
     """
@@ -297,19 +316,20 @@ class LayerNorm(nn.Module):
             output = output + self.center_param
         return output
 
+
 class Mlp(nn.Module):
     def __init__(
-            self,
-            hidden_sizes,
-            output_size,
-            input_size,
-            init_w=3e-3,
-            hidden_activation=F.relu,
-            output_activation=ptu.identity,
-            hidden_init=ptu.fanin_init,
-            b_init_value=0.,
-            layer_norm=False,
-            layer_norm_kwargs=None,
+        self,
+        hidden_sizes,
+        output_size,
+        input_size,
+        init_w=3e-3,
+        hidden_activation=F.relu,
+        output_activation=ptu.identity,
+        hidden_init=ptu.fanin_init,
+        b_init_value=0.0,
+        layer_norm=False,
+        layer_norm_kwargs=None,
     ):
         super().__init__()
 
@@ -356,9 +376,11 @@ class Mlp(nn.Module):
         else:
             return output
 
+
 class DistributionGenerator(nn.Module, metaclass=abc.ABCMeta):
     def forward(self, *input, **kwarg) -> Distribution:
         raise NotImplementedError
+
 
 class MultiInputSequential(nn.Sequential):
     def forward(self, *input):
@@ -369,10 +391,9 @@ class MultiInputSequential(nn.Sequential):
                 input = module(input)
         return input
 
+
 class ModuleToDistributionGenerator(
-    MultiInputSequential,
-    DistributionGenerator,
-    metaclass=abc.ABCMeta
+    MultiInputSequential, DistributionGenerator, metaclass=abc.ABCMeta
 ):
     pass
 
@@ -397,16 +418,21 @@ class Gaussian(ModuleToDistributionGenerator):
             mean, log_std = super().forward(*input)
             std = log_std.exp()
         return MultivariateDiagonalNormal(
-            mean, std, reinterpreted_batch_ndims=self.reinterpreted_batch_ndims)
+            mean, std, reinterpreted_batch_ndims=self.reinterpreted_batch_ndims
+        )
+
 
 class Bernoulli(Distribution, TorchBernoulli):
     def get_diagnostics(self):
         stats = OrderedDict()
-        stats.update(ptu.create_stats_ordered_dict(
-            'probability',
-            ptu.get_numpy(self.probs),
-        ))
+        stats.update(
+            ptu.create_stats_ordered_dict(
+                "probability",
+                ptu.get_numpy(self.probs),
+            )
+        )
         return stats
+
 
 class BernoulliGenerator(ModuleToDistributionGenerator):
     def forward(self, *input):
@@ -426,17 +452,24 @@ class IndependentGenerator(ModuleToDistributionGenerator):
             reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
         )
 
+
 class GaussianMixtureDistribution(Distribution):
     def __init__(self, normal_means, normal_stds, weights):
         self.num_gaussians = weights.shape[1]
         self.normal_means = normal_means
         self.normal_stds = normal_stds
         self.normal = MultivariateDiagonalNormal(normal_means, normal_stds)
-        self.normals = [MultivariateDiagonalNormal(normal_means[:, :, i], normal_stds[:, :, i]) for i in range(self.num_gaussians)]
+        self.normals = [
+            MultivariateDiagonalNormal(normal_means[:, :, i], normal_stds[:, :, i])
+            for i in range(self.num_gaussians)
+        ]
         self.weights = weights
         self.categorical = OneHotCategorical(self.weights[:, :, 0])
 
-    def log_prob(self, value, ):
+    def log_prob(
+        self,
+        value,
+    ):
         log_p = [self.normals[i].log_prob(value) for i in range(self.num_gaussians)]
         log_p = torch.stack(log_p, -1)
         log_p = log_p.sum(dim=1)
@@ -454,12 +487,11 @@ class GaussianMixtureDistribution(Distribution):
 
     def rsample(self):
         z = (
-                self.normal_means +
-                self.normal_stds *
-                MultivariateDiagonalNormal(
-                    ptu.zeros(self.normal_means.size()),
-                    ptu.ones(self.normal_stds.size())
-                ).sample()
+            self.normal_means
+            + self.normal_stds
+            * MultivariateDiagonalNormal(
+                ptu.zeros(self.normal_means.size()), ptu.ones(self.normal_stds.size())
+            ).sample()
         )
         z.requires_grad_()
         c = self.categorical.sample()[:, :, None]
@@ -472,7 +504,7 @@ class GaussianMixtureDistribution(Distribution):
         This often computes the mode of the distribution, but not always.
         """
         c = ptu.zeros(self.weights.shape[:2])
-        ind = torch.argmax(self.weights, dim=1) # [:, 0]
+        ind = torch.argmax(self.weights, dim=1)  # [:, 0]
         c.scatter_(1, ind, 1)
         s = torch.matmul(self.normal_means, c[:, :, None])
         return torch.squeeze(s, 2)
@@ -481,31 +513,40 @@ class GaussianMixtureDistribution(Distribution):
         s = "GaussianMixture(normal_means=%s, normal_stds=%s, weights=%s)"
         return s % (self.normal_means, self.normal_stds, self.weights)
 
+
 class GaussianMixtureFullDistribution(Distribution):
     def __init__(self, normal_means, normal_stds, weights):
         self.num_gaussians = weights.shape[-1]
         self.normal_means = normal_means
         self.normal_stds = normal_stds
         self.normal = MultivariateDiagonalNormal(normal_means, normal_stds)
-        self.normals = [MultivariateDiagonalNormal(normal_means[:, :, i], normal_stds[:, :, i]) for i in range(self.num_gaussians)]
+        self.normals = [
+            MultivariateDiagonalNormal(normal_means[:, :, i], normal_stds[:, :, i])
+            for i in range(self.num_gaussians)
+        ]
         self.weights = (weights + epsilon) / (1 + epsilon * self.num_gaussians)
         assert (self.weights > 0).all()
         self.categorical = Categorical(self.weights)
 
-    def log_prob(self, value, ):
+    def log_prob(
+        self,
+        value,
+    ):
         log_p = [self.normals[i].log_prob(value) for i in range(self.num_gaussians)]
         log_p = torch.stack(log_p, -1)
         log_weights = torch.log(self.weights)
         lp = log_weights + log_p
         m = lp.max(dim=2, keepdim=True)[0]  # log-sum-exp numerical stability trick
         log_p_mixture = m + torch.log(torch.exp(lp - m).sum(dim=2, keepdim=True))
-        raise NotImplementedError("from Vitchyr: idk what the point is of "
-                                  "this class, so I didn't both updating "
-                                  "this, but log_prob should return something "
-                                  "of shape [batch_size] and not [batch_size, "
-                                  "1] to be in accordance with the "
-                                  "torch.distributions.Distribution "
-                                  "interface.")
+        raise NotImplementedError(
+            "from Vitchyr: idk what the point is of "
+            "this class, so I didn't both updating "
+            "this, but log_prob should return something "
+            "of shape [batch_size] and not [batch_size, "
+            "1] to be in accordance with the "
+            "torch.distributions.Distribution "
+            "interface."
+        )
         return torch.squeeze(log_p_mixture, 2)
 
     def sample(self):
@@ -516,12 +557,11 @@ class GaussianMixtureFullDistribution(Distribution):
 
     def rsample(self):
         z = (
-                self.normal_means +
-                self.normal_stds *
-                MultivariateDiagonalNormal(
-                    ptu.zeros(self.normal_means.size()),
-                    ptu.ones(self.normal_stds.size())
-                ).sample()
+            self.normal_means
+            + self.normal_stds
+            * MultivariateDiagonalNormal(
+                ptu.zeros(self.normal_means.size()), ptu.ones(self.normal_stds.size())
+            ).sample()
         )
         z.requires_grad_()
         c = self.categorical.sample()[:, :, None]
@@ -560,10 +600,12 @@ class TanhGaussian(ModuleToDistributionGenerator):
         std = log_std.exp()
         return TanhNormal(mean, std)
 
+
 class Policy(object, metaclass=abc.ABCMeta):
     """
     General policy interface.
     """
+
     @abc.abstractmethod
     def get_action(self, observation):
         """
@@ -576,19 +618,26 @@ class Policy(object, metaclass=abc.ABCMeta):
     def reset(self):
         pass
 
+
 class ExplorationPolicy(Policy, metaclass=abc.ABCMeta):
     def set_num_steps_total(self, t):
         pass
 
+
 class TorchStochasticPolicy(
-    DistributionGenerator,
-    ExplorationPolicy, metaclass=abc.ABCMeta
+    DistributionGenerator, ExplorationPolicy, metaclass=abc.ABCMeta
 ):
-    def get_action(self, obs_np, ):
+    def get_action(
+        self,
+        obs_np,
+    ):
         actions = self.get_actions(obs_np[None])
         return actions[0, :], {}
 
-    def get_actions(self, obs_np, ):
+    def get_actions(
+        self,
+        obs_np,
+    ):
         dist = self._get_dist_from_np(obs_np)
         actions = dist.sample()
         return elem_or_tuple_to_numpy(actions)
@@ -599,8 +648,10 @@ class TorchStochasticPolicy(
         dist = self(*torch_args, **torch_kwargs)
         return dist
 
+
 class Delta(Distribution):
     """A deterministic distribution"""
+
     def __init__(self, value):
         self.value = value
 
@@ -622,6 +673,7 @@ class Delta(Distribution):
     def entropy(self):
         return 0
 
+
 class TanhGaussianPolicy(Mlp, TorchStochasticPolicy):
     """
     Usage:
@@ -631,13 +683,7 @@ class TanhGaussianPolicy(Mlp, TorchStochasticPolicy):
     """
 
     def __init__(
-            self,
-            hidden_sizes,
-            obs_dim,
-            action_dim,
-            std=None,
-            init_w=1e-3,
-            **kwargs
+        self, hidden_sizes, obs_dim, action_dim, std=None, init_w=1e-3, **kwargs
     ):
         super().__init__(
             hidden_sizes,
@@ -669,8 +715,17 @@ class TanhGaussianPolicy(Mlp, TorchStochasticPolicy):
             log_std = torch.clamp(log_std, LOG_SIG_MIN, LOG_SIG_MAX)
             std = torch.exp(log_std)
         else:
-            std = torch.from_numpy(np.array([self.std, ])).float().to(
-                ptu.device)
+            std = (
+                torch.from_numpy(
+                    np.array(
+                        [
+                            self.std,
+                        ]
+                    )
+                )
+                .float()
+                .to(ptu.device)
+            )
 
         return TanhNormal(mean, std)
 
@@ -682,11 +737,17 @@ class TanhGaussianPolicy(Mlp, TorchStochasticPolicy):
         log_prob = log_prob.sum(dim=1, keepdim=True)
         return log_prob
 
-    def get_action(self, obs_np, ):
+    def get_action(
+        self,
+        obs_np,
+    ):
         actions = self.get_actions(obs_np[None])
         return actions[0, :], {}
 
-    def get_actions(self, obs_np, ):
+    def get_actions(
+        self,
+        obs_np,
+    ):
         dist = self._get_dist_from_np(obs_np)
         actions = dist.sample()
         return elem_or_tuple_to_numpy(actions)
@@ -697,10 +758,11 @@ class TanhGaussianPolicy(Mlp, TorchStochasticPolicy):
         dist = self(*torch_args, **torch_kwargs)
         return dist
 
+
 class MakeDeterministic(TorchStochasticPolicy):
     def __init__(
-            self,
-            action_distribution_generator: DistributionGenerator,
+        self,
+        action_distribution_generator: DistributionGenerator,
     ):
         super().__init__()
         self._action_distribution_generator = action_distribution_generator
